@@ -1,0 +1,1211 @@
+openapi: 3.1.0
+info:
+  title: S2S RNG API v2 (Draft)
+  version: 2.0.4
+  description: |-
+    Proprietary JSON REST API for interacting with Szrek2Solutions' TDR2 Lottery and Gaming draw systems to generate and verify random number sets.
+
+    Copyright (c) Szrek2Solutions LLC. All rights reserved.
+  contact:
+    url: 'http://www.szrek.com'
+    email: info@szrek.com
+  summary: Random Number Generator API
+servers:
+  - description: Local Server
+    url: 'http://localhost:9152/api/v2/rng'
+  - url: 'http://rnghost:9152/api/v2/rng'
+    description: Test Server
+components:
+  schemas:
+    ClientIdentity:
+      type: object
+      x-internal: true
+      properties:
+        clientId:
+          type: string
+          description: Name or identifier of the client system. Optional input/output.
+          example: GAMESERVER-1
+        clientTransactionId:
+          type: integer
+          description: Client's unique identifier for this transaction. Optional input/output.
+          format: int64
+          example: 102030450
+    ClientTime:
+      type: object
+      x-internal: true
+      properties:
+        clientTime:
+          type: string
+          format: date-time
+          description: Time on the client system. Optional input.
+          example: '2020-09-30T18:30:23Z'
+        clientBusinessDay:
+          type: integer
+          description: Client's current business day. Format is YYMMDD. Optional input.
+          example: 200930
+    ServerInfo:
+      type: object
+      x-internal: true
+      properties:
+        serverId:
+          type: string
+          example: RNG-TEST-87
+          description: Draw server identifier.
+        serverVersion:
+          type: string
+          example: '9.3'
+          description: Draw server version number.
+      readOnly: true
+    TestMode:
+      type: boolean
+      description: Indicates that the draw is a test only and not valid for use. Optional input. Default is false.
+      x-userDataIndex: 1
+      x-internal: true
+    DeferredSigning:
+      type: boolean
+      x-stoplight:
+        id: opxulwmyhdkvm
+      description: 'True if deferred signing mode is requested, for the fastest response times. Used for quick-picks and other transactions where high performance is needed. Optional input/output.'
+      x-userDataIndex: 1
+      x-internal: true
+      title: ''
+    DrawUser:
+      type: object
+      description: Draw participant's name and login time as used in the draw reports. Optional input.
+      x-internal: true
+      properties:
+        name:
+          type: string
+          description: Full name of the user as it should appear in the draw reports.
+          example: John Smith
+        loginTime:
+          type: string
+          format: date-time
+          description: The time that the user logged into the draw GUI. Optional input.
+          example: '2020-03-15T15:47:44Z'
+    DrawUsers:
+      description: 'Participants conducting the draw. The first user is the Draw Manager, second user is the Draw Auditor, and third is the Draw Observer. Optional input. Default is none.'
+      type: array
+      items:
+        $ref: '#/components/schemas/DrawUser'
+      x-internal: true
+    Distribution:
+      type: object
+      description: 'Distribution values and depletion type. Used for TABLE products only. '
+      x-examples: {}
+      x-internal: true
+      properties:
+        values:
+          type: array
+          description: Array of distribution values.
+          maxItems: 64
+          items:
+            type: integer
+          example:
+            - 8
+            - 8
+            - 8
+            - 8
+            - 8
+        depletionType:
+          type: string
+          enum:
+            - NO_DEPLETION
+            - DECREASE_ENTRY
+            - REMOVE_ENTRY
+          description: Specifies method of depletion for the distribution values.
+          readOnly: true
+    Exclusions:
+      type: array
+      description: Values to be excluded from the generation. For non-TABLE products only. Optional input.
+      uniqueItems: true
+      maxItems: 65535
+      example:
+        - 10
+        - 30
+        - 53
+      items:
+        type: integer
+      x-internal: true
+    DrawMatrix:
+      type: object
+      description: The RNG parameter matrix for a draw. The product definition may or may not allow overriding of these values. Optional input/optional output.
+      x-internal: true
+      properties:
+        setSize:
+          type: integer
+          description: How many numbers in each set drawn. Optional input/output. Default is defined by product configuration.
+          example: 3
+          minimum: 1
+        minValue:
+          type: integer
+          description: Lowest number that can be drawn. Optional input/output. Default is defined by product configuration.
+          example: 1
+        maxValue:
+          type: integer
+          description: Highest number that can be drawn. Optional input/output. Default is defined by product configuration.
+          example: 9
+        withReplacement:
+          type: boolean
+          description: True if drawn numbers can be repeated within a set. Optional input/output.
+        exclusions:
+          $ref: '#/components/schemas/Exclusions'
+        distribution:
+          $ref: '#/components/schemas/Distribution'
+    ClientData:
+      type: array
+      description: Optional data fields that are signed and logged. They can also be extracted and used in post-processing and reports. Optional input.
+      x-internal: true
+      example:
+        - A data field
+        - Another data field
+      items:
+        type: string
+    Status:
+      type: object
+      description: Status code and description.
+      x-internal: true
+      readOnly: true
+      properties:
+        code:
+          type: integer
+          description: Numeric error or status code.
+          example: 0
+          x-internal: true
+        description:
+          type: string
+          description: Short description of the error or status code.
+          example: Success
+          x-internal: true
+    UserData:
+      type: array
+      description: DEPRECATED. Optional text fields that are signed and logged. If used it is incompatible with many of the other Draw fields and will replace their values. Optional input.
+      x-internal: true
+      deprecated: true
+      items:
+        type: string
+      example:
+        - some data field
+        - some other data
+    UserDataFields:
+      x-internal: true
+      type: object
+      properties:
+        drawNumber:
+          type: integer
+          example: 1
+          description: Draw number to be shown in draw reports. Optional input. Default is 1.
+          minimum: 1
+        drawHash:
+          type: string
+          description: 'Hash of some draw data such as all bets, or a file containing draw input data. Typically SHA-1 in ASCII hex format. Optional input.'
+          example: B63C77E06612D820BC3BE72877C74F257B562A20
+        drawFile:
+          type: string
+          description: 'If drawHash contains a file hash, the name of the file is specified here. Optional input.'
+          example: BETS_20210312_123_LOTTO6.dat
+        drawText:
+          type: string
+          description: An extra text string that will appear in the draw reports and is also appended to the draw report file names. Optional input.
+          example: PROMO-1
+    DrawInput:
+      x-internal: true
+      allOf:
+        - type: object
+          properties:
+            productId:
+              type: integer
+              description: Identifier of the product definition used for the draw generation. Required input/output.
+              example: 1002
+            numberOfSets:
+              type: integer
+              description: How many sets of numbers to generate. Optional input. Default is defined by product configuration.
+              minimum: 1
+              example: 1
+            drawMatrix:
+              $ref: '#/components/schemas/DrawMatrix'
+        - $ref: '#/components/schemas/UserDataFields'
+        - type: object
+          properties:
+            clientData:
+              $ref: '#/components/schemas/ClientData'
+    DrawOutput:
+      x-internal: true
+      type: object
+      properties:
+        productId:
+          type: integer
+          description: Identifier of the product definition used for the draw generation. Required input/output.
+          example: 1002
+        drawMatrix:
+          allOf:
+            - $ref: '#/components/schemas/DrawMatrix'
+            - type: object
+              properties:
+                exclusions:
+                  $ref: '#/components/schemas/Exclusions'
+        recordId:
+          type: string
+          description: Unique record identifier (URI) of the draw. Output.
+          example: EX191109870000000125
+          readOnly: true
+        recordHandle:
+          type: integer
+          description: A look-up handle that can optionally be used for faster verification processing.
+          format: int64
+          readOnly: true
+        timestamp:
+          type: string
+          format: date-time
+          description: Date and time the draw results were generated. Output.
+          example: '2020-09-30T18:30:23Z'
+          readOnly: true
+        sets:
+          type: array
+          description: Generated sets of numbers. Output.
+          example:
+            - - 4
+              - 8
+              - 9
+          items:
+            type: array
+            items:
+              type: integer
+        resultsHash:
+          $ref: '#/components/schemas/ResultsHash'
+        seed:
+          $ref: '#/components/schemas/Seed'
+          x-stoplight:
+            id: cj4w7h7df96gq
+    SecurityRequest:
+      type: object
+      description: ''
+      x-internal: true
+      properties:
+        id:
+          type: string
+          description: Security block type identifier. Required input/output.
+          example: S2S
+        version:
+          type: string
+          description: Format version of the security block. Optional input/output.
+          example: '1.0'
+      required:
+        - id
+    SecurityRequests:
+      type: array
+      items:
+        $ref: '#/components/schemas/SecurityRequest'
+      x-internal: true
+      description: 'Security blocks are used to authenticate various elements of the transaction. It can be an encrypted ICS block, product checksums, etc. Optional input.'
+    SecurityBlock:
+      description: ''
+      x-internal: true
+      title: ''
+      allOf:
+        - $ref: '#/components/schemas/SecurityRequest'
+        - type: object
+          properties:
+            keyId:
+              type: string
+              description: 'Identifier of the public key needed to verify the security block, if applicable. Output.'
+              example: 308C-1328-3940-DC32
+              readOnly: true
+            data:
+              type: string
+              description: Base 64 encoded content of the security block. Output.
+              example: VGhpcyBpcyBhbiBleGFtcGxl
+              readOnly: true
+    SecurityBlocks:
+      type: array
+      items:
+        $ref: '#/components/schemas/SecurityBlock'
+      x-internal: true
+      description: 'Security blocks are used to authenticate various elements of the transaction. It can be an encrypted ICS block, product checksums, etc. Output.'
+    ExtractFields:
+      type: array
+      description: Name/value pairs as would be generated in a CSV extract file.
+      x-internal: true
+      items:
+        type: object
+        description: ''
+        properties:
+          name:
+            type: string
+            description: Column name for the CSV extract field.
+          value:
+            type: string
+            description: 'Value of the extract field, formatted for CSV.'
+    FieldError:
+      type: object
+      description: Details about a specific field error.
+      x-internal: true
+      properties:
+        errorType:
+          type: string
+          description: Error type name.
+        message:
+          type: string
+          description: Additional detail about the error code.
+        fieldName:
+          type: string
+          description: 'Name of the field that caused the error, if applicable.'
+        path:
+          type: string
+          description: 'Path to the field that caused the error, if applicable.'
+    ErrorResponse:
+      description: Describes the error and any specific problems with fields in the request.
+      allOf:
+        - type: object
+          properties:
+            errorType:
+              type: string
+              description: |
+                Error type name
+        - $ref: '#/components/schemas/Status'
+        - type: object
+          properties:
+            fieldErrors:
+              type: array
+              items:
+                $ref: '#/components/schemas/FieldError'
+      x-internal: false
+    TableDef:
+      type: object
+      description: 'Properties for TABLE-type products. '
+      x-examples: {}
+      x-internal: true
+      properties:
+        initialValues:
+          type: array
+          description: Default distribution table values.
+          maxItems: 64
+          example:
+            - 8
+            - 8
+            - 8
+            - 8
+            - 8
+          items:
+            type: integer
+        overrrideType:
+          type: string
+          description: Describes the options for overriding the table _initialValues_ in the draw request. FIXED means the request table must match the _initialValues_ exactly; FIXED_WITH_ZEROIZE means each table value must match _initialValues_ or zero; and VARIABLE means the table values are not required to match _initialValues_.
+          enum:
+            - FIXED
+            - FIXED_WITH_ZEROIZE
+            - VARIABLE
+        minSize:
+          type: integer
+          description: Minimum table size that can be sent in the draw request.
+        maxSize:
+          type: integer
+          description: Maximum table size that can be sent in the draw request.
+        depletionType:
+          type: string
+          enum:
+            - NO_DEPLETION
+            - DECREASE_ENTRY
+            - REMOVE_ENTRY
+          description: Specifies method of depletion for the distribution table.
+        renewing:
+          type: boolean
+          description: True if the table values will be automatically renewed when depleted.
+        persistent:
+          type: boolean
+          description: 'True if the table depletion is persisted between draw requests, or false if a new table is used for each draw request.'
+        tableType:
+          type: string
+          enum:
+            - NEW
+            - RENEW
+            - EXHAUST
+            - INDEPENDENT
+            - UNIQUE
+          description: Shows the configured liablility control type for the product.
+        reseed:
+          type: integer
+          x-stoplight:
+            id: ff9v7ws63wpj3
+          description: 'Reseed threshold for a RENEW table type. When the sum of table elements is less than this value, the table will automatically add the initial values.'
+    ProductDef:
+      x-internal: true
+      type: object
+      description: Draw product details.
+      properties:
+        id:
+          type: integer
+          description: Product identifier.
+          example: 1002
+        name:
+          type: string
+          description: Product name.
+          example: Pick 3
+        type:
+          type: string
+          enum:
+            - INTEGER
+            - TABLE
+          description: The configured RNG algorithm type for the product.
+        validFrom:
+          type: string
+          description: The date when the product is first active.
+          format: date-time
+        validUntil:
+          type: string
+          description: The date when the product is last active.
+          format: date-time
+        active:
+          type: boolean
+          description: True if the product is currently active.
+        hasReports:
+          type: string
+          x-stoplight:
+            id: mtw8tyddzie1b
+          description: True if this product's draws generate reports.
+        hash:
+          type: string
+          description: SHA-1 Hash of the product definition record.
+          format: binary
+          example: 12D820BC3BE7B63C77E06627B562A20877C74F25
+        numSets:
+          type: integer
+          x-stoplight:
+            id: jr6w8i9lidqpg
+          example: 1
+          description: Default number of sets to draw.
+        maxSets:
+          type: integer
+          description: 'The maximum number of sets that can be requested, assuming _setSize_ is _minSetSize_.'
+          example: 3
+          minimum: 1
+        setSize:
+          type: integer
+          description: The default size of a set of drawn numbers.
+          example: 3
+          minimum: 1
+        minSetSize:
+          type: integer
+          description: Minimum set size that can be drawn.
+          example: 1
+        maxSetSize:
+          type: integer
+          description: 'Maximum set size that can be drawn, assuming _numberOfSets_ is 1. Returns -1 if it is dependent on request inputs, such as table size.'
+          example: 3
+        maxNumbers:
+          type: string
+          x-stoplight:
+            id: dfyofwaa7i9er
+          description: Maximum number of numbers that can be returned in a draw request for this product.
+        overrideEnabled:
+          type: boolean
+          description: True if the default values of _minValue_ and _maxValue_ can be overridden in the draw request.
+        minValue:
+          type: integer
+          description: Lowest number that can be drawn. For non-TABLE products only.
+          example: 0
+        maxValue:
+          type: integer
+          description: Highest number that can be drawn. For non-TABLE products only.
+          example: 9
+        withReplacement:
+          type: boolean
+          description: True if drawn numbers can be repeated within a set. For non-TABLE products only.
+        table:
+          $ref: '#/components/schemas/TableDef'
+    SecurityModule:
+      type: object
+      x-internal: true
+      properties:
+        serial:
+          type: string
+          description: Serial number of the security module.
+          example: 01000000F00019C8
+        sequencer:
+          type: integer
+          description: 'Sequence number on the security module, if available.'
+          example: 734595
+        time:
+          type: string
+          description: 'Real-time clock value on the security module, if available.'
+          example: '2020-09-30T18:30:23Z'
+        keyId:
+          type: string
+          description: Identifier of the RSA key pair on the security module.
+          example: 308C-1328-3940-DC32
+    ResultsHash:
+      title: ResultsHash
+      type: object
+      description: 'A hash of all critical draw data for a specific draw, including: Product, draw number, draw time, HSM details, URI, signature, and the generated numbers.'
+      properties:
+        hash:
+          type: string
+          description: An ASCII hex string of the SHA-1 (or other) hash value.
+        version:
+          type: integer
+          description: Internal version number of the hash algorithm used.
+      x-internal: true
+    Proof:
+      title: Proof
+      x-stoplight:
+        id: bir4ihuepj7za
+      type: object
+      description: Proof-of-integrity data.
+      properties:
+        module:
+          $ref: '#/components/schemas/SecurityModule'
+          x-stoplight:
+            id: b5byiwndloamy
+          description: Security module used to generate the digital signature.
+        publicKey:
+          type: string
+          x-stoplight:
+            id: wfthgylpfnbxl
+          description: Public part of the key pair used to generate the digital signature.
+        signature:
+          type: string
+          x-stoplight:
+            id: ssarv8e5gg6bu
+          description: Digital signature used as RNG seed input for this draw.
+      x-internal: true
+    Seed:
+      title: Seed
+      x-stoplight:
+        id: glit3gemwgt9c
+      type: object
+      description: RNG seed used to generate the random numbers. Optional output.
+      properties:
+        seed:
+          type: string
+          x-stoplight:
+            id: jis5wni7bn0pp
+          description: The RNG seed as a hexadecimal string.
+        seedIndex:
+          type: integer
+          x-stoplight:
+            id: 4eylj2psp5bhy
+          description: Starting byte offset into the seed buffer.
+      x-internal: true
+  responses:
+    BadRequestResponse:
+      description: Bad Request
+      headers: {}
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            Input Validation Failed:
+              value:
+                code: 999
+                description: Input validation failed.
+                fieldErrors:
+                  - code: INVALID_VALUE
+                    message: Product not found
+                    fieldName: productId
+                    path: 'draws[1].productId'
+  securitySchemes:
+    ApiKeyAuth:
+      name: X-API-Key
+      type: apiKey
+      in: header
+      description: Long-lived API key for authorization and identification of the calling application.
+paths:
+  /draws:
+    parameters: []
+    post:
+      summary: Generate Draw Records
+      operationId: post-draws
+      description: 'Process a batch of one or more draw requests. Most of the defined input fields are optional, but when used they provide additional verification and security features. '
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ServerInfo'
+                  - $ref: '#/components/schemas/ClientIdentity'
+                  - type: object
+                    properties:
+                      transactionStatus:
+                        allOf:
+                          - $ref: '#/components/schemas/Status'
+                        description: Overall status of the batch request. Present only if status code is non-zero.
+                      businessDay:
+                        type: integer
+                        description: Business day under which the transaction was recorded. Format is YYMMDD.
+                        example: 200930
+                        readOnly: true
+                      draws:
+                        type: array
+                        description: Array of draw records.
+                        items:
+                          allOf:
+                            - type: object
+                              properties:
+                                drawStatus:
+                                  allOf:
+                                    - $ref: '#/components/schemas/Status'
+                                  description: Status of the draw request. Present only if status code is non-zero.
+                                clientRecordId:
+                                  type: string
+                                  description: Client's unique identifier for this draw.
+                                  example: RQID-31234545-32
+                            - $ref: '#/components/schemas/DrawOutput'
+                            - type: object
+                              properties:
+                                securityBlocks:
+                                  $ref: '#/components/schemas/SecurityBlocks'
+                      deferredSigning:
+                        type: boolean
+                        x-stoplight:
+                          id: g78981av26wh0
+                        description: True if deferred signing mode was used for this request.
+                      proof:
+                        $ref: '#/components/schemas/Proof'
+                        x-stoplight:
+                          id: nxbsv86kpukmd
+                        description: Proof-of-integrity data for this draw. Optional output.
+              examples:
+                Cash 3 Minimal:
+                  value:
+                    serverId: ASL-RNG-TEST (87)
+                    serverVersion: '11.0'
+                    businessDay: 210701
+                    draws:
+                      - productId: 1701
+                        drawMatrix:
+                          setSize: 3
+                          minValue: 0
+                          maxValue: 9
+                          withReplacement: true
+                        recordId: EX210701870000409847
+                        recordHandle: 8509
+                        sets:
+                          - - 4
+                            - 3
+                            - 6
+                        timeStamp: '2021-07-01T16:02:32Z'
+                Cash 4 Minimal:
+                  value:
+                    serverId: ASL-RNG-TEST (87)
+                    serverVersion: '11.0'
+                    businessDay: 210701
+                    draws:
+                      - productId: 1702
+                        drawMatrix:
+                          setSize: 4
+                          minValue: 0
+                          maxValue: 9
+                          withReplacement: true
+                        recordId: EX210701870000409948
+                        recordHandle: 8509
+                        sets:
+                          - - 4
+                            - 9
+                            - 2
+                            - 3
+                        timeStamp: '2021-07-01T16:09:02Z'
+                Natural State Jackpot Minimal:
+                  value:
+                    serverId: ASL-RNG-TEST (87)
+                    serverVersion: '11.0'
+                    businessDay: 210701
+                    draws:
+                      - productId: 1710
+                        drawMatrix:
+                          setSize: 5
+                          minValue: 1
+                          maxValue: 39
+                          withReplacement: false
+                        recordId: EX210701870000410049
+                        recordHandle: 8509
+                        sets:
+                          - - 9
+                            - 10
+                            - 13
+                            - 17
+                            - 28
+                        timeStamp: '2021-07-01T16:13:04Z'
+                All Fields:
+                  value:
+                    serverId: RNG-TEST-87
+                    serverVersion: '9.3'
+                    clientId: GAMESERVER-1
+                    clientTransactionId: 102030450
+                    clientTime: '2020-09-30T18:30:23Z'
+                    clientBusinessDay: 200930
+                    transactionStatus:
+                      code: 0
+                      description: Success
+                    businessDay: 200930
+                    testMode: true
+                    drawUsers:
+                      - name: John Smith
+                        loginTime: '2020-03-15T15:47:44Z'
+                    draws:
+                      - drawStatus:
+                          code: 0
+                          description: Success
+                        clientRecordId: RQID-31234545-32
+                        productId: 1002
+                        numberOfSets: 1
+                        drawMatrix:
+                          setSize: 6
+                          minValue: 1
+                          maxValue: 49
+                          withReplacement: true
+                          distribution:
+                            values:
+                              - 8
+                            depletionType: NO_DEPLETION
+                          exclusions:
+                            - 10
+                            - 30
+                            - 53
+                        drawNumber: 1
+                        drawHash: B63C77E06612D820BC3BE72877C74F257B562A20
+                        drawFile: BETS_20210312_123_LOTTO6.dat
+                        drawText: PROMO-1
+                        clientData:
+                          - A data field
+                          - Another data field
+                        recordId: EX191109870000000125
+                        recordHandle: 0
+                        timestamp: '2020-09-30T18:30:23Z'
+                        sets:
+                          - - 0
+                        securityBlocks:
+                          - id: S2S
+                            version: '1.0'
+                            keyId: 308C-1328-3940-DC32
+                            data: VGhpcyBpcyBhbiBleGFtcGxl
+        '400':
+          $ref: '#/components/responses/BadRequestResponse'
+        '401':
+          description: Unauthorized
+        '422':
+          description: Unprocessable Entity (WebDAV)
+          content: {}
+        '500':
+          description: Internal Server Error
+          content: {}
+        '503':
+          description: Service Unavailable
+          content: {}
+      requestBody:
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/ClientIdentity'
+                - $ref: '#/components/schemas/ClientTime'
+                - type: object
+                  required:
+                    - draws
+                  properties:
+                    responseDetail:
+                      type: string
+                      enum:
+                        - FULL
+                        - NORMAL
+                        - MINIMAL
+                      description: 'Controls the level of detail in the response message. Use FULL for all input and output fields, NORMAL for all output fields, and MINIMAL for required output fields only. Optional input. Default is NORMAL.'
+                      writeOnly: true
+                    deferredSigning:
+                      $ref: '#/components/schemas/DeferredSigning'
+                      x-stoplight:
+                        id: hc1tzdv7ieyhk
+                      description: 'True if deferred signing mode is requested, for the fastest response times. Used for quick-picks and other transactions where high performance is needed.'
+                    includeProof:
+                      type: boolean
+                      x-stoplight:
+                        id: w8emd6k2ab1sr
+                      default: false
+                      description: Include proof-of-integrity data in the response. Optional input. Default is false.
+                    includeSeeds:
+                      type: boolean
+                      x-stoplight:
+                        id: phk7vsqfglczf
+                      default: false
+                      description: Include RNG seeds in the draw responses. Optional input. Default is false.
+                    testMode:
+                      $ref: '#/components/schemas/TestMode'
+                    users:
+                      $ref: '#/components/schemas/DrawUsers'
+                    draws:
+                      type: array
+                      description: Array of draw requests. Required input/output.
+                      minItems: 1
+                      maxItems: 25
+                      items:
+                        allOf:
+                          - type: object
+                            properties:
+                              clientRecordId:
+                                type: string
+                                description: Client's unique identifier for this draw. Optional input.
+                                example: RQID-31234545-32
+                          - $ref: '#/components/schemas/DrawInput'
+                          - type: object
+                            properties:
+                              securityBlocks:
+                                $ref: '#/components/schemas/SecurityRequests'
+            examples:
+              Cash 3 Minimal:
+                value:
+                  draws:
+                    - productId: 1701
+              Cash 4 Minimal:
+                value:
+                  draws:
+                    - productId: 1702
+              Natural State Jackpot Minimal:
+                value:
+                  draws:
+                    - productId: 1710
+              All Fields:
+                value:
+                  clientId: GAMESERVER-1
+                  clientTransactionId: 102030450
+                  clientTime: '2020-09-30T18:30:23Z'
+                  clientBusinessDay: 200930
+                  testMode: true
+                  users:
+                    - name: John Smith
+                      loginTime: '2020-03-15T15:47:44Z'
+                  draws:
+                    - clientRecordId: RQID-31234545-32
+                      productId: 1002
+                      numberOfSets: 1
+                      drawMatrix:
+                        setSize: 6
+                        minValue: 1
+                        maxValue: 49
+                        distribution:
+                          values:
+                            - 8
+                        exclusions:
+                          - 10
+                          - 30
+                          - 53
+                      drawNumber: 1
+                      drawHash: B63C77E06612D820BC3BE72877C74F257B562A20
+                      drawFile: BETS_20210312_123_LOTTO6.dat
+                      drawText: PROMO-1
+                      clientData:
+                        - A data field
+                        - Another data field
+                      userData:
+                        - some data field
+                        - some other data
+                      securityBlocks:
+                        - id: S2S
+                          version: '1.0'
+        description: ''
+      parameters: []
+      tags:
+        - Draws
+      security:
+        - {}
+        - ApiKeyAuth: []
+  /draws/verification:
+    parameters: []
+    post:
+      summary: Verify Draw Record
+      description: |-
+        Verifies a previously generated draw record using the following steps:
+        - Retrieves the original draw record using the provided URI.
+        - Verifies that the draw record is valid and unmodified.
+        - Verifies that the draw signature is valid.
+        - Generates the draw results again and returns the record detail.
+
+
+        The API user can then independently verify that the regenerated draw results match the original draw results.
+      operationId: post-verifications
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ServerInfo'
+                  - type: object
+                    properties:
+                      recordId:
+                        type: string
+                        description: The Unique Record Identifier (URI) of the record verified.
+                        example: EX210622870000000335
+                      recordHandle:
+                        type: string
+                        description: The recordHandle that was returned in RNG response.
+                        format: int64
+                        example: '184638'
+                      verificationStatus:
+                        allOf:
+                          - $ref: '#/components/schemas/Status'
+                        description: Status of the verification request.
+                      auditId:
+                        type: string
+                        x-stoplight:
+                          id: 2mu5wny3tfyiz
+                        description: The unique id assigned to this audit request.
+                      businessDay:
+                        type: integer
+                        description: Business day under which the transaction was recorded. Format is YYMMDD.
+                        example: 200930
+                      timestamp:
+                        type: string
+                        format: date-time
+                        description: Date and time the draw results were generated.
+                        example: '2020-09-30T18:30:23Z'
+                      productId:
+                        type: integer
+                        description: Identifier of the product definition used for the draw generation.
+                        example: 1002
+                      productName:
+                        type: string
+                        description: Name of the product definition.
+                      drawMatrix:
+                        $ref: '#/components/schemas/DrawMatrix'
+                      sets:
+                        type: array
+                        description: Generated sets of numbers.
+                        example:
+                          - - 4
+                            - 8
+                            - 9
+                        items:
+                          type: array
+                          items:
+                            type: integer
+                      testMode:
+                        $ref: '#/components/schemas/TestMode'
+                      deferredSigning:
+                        $ref: '#/components/schemas/DeferredSigning'
+                        x-stoplight:
+                          id: 75z3uepzalh39
+                      users:
+                        $ref: '#/components/schemas/DrawUsers'
+                      resultsHash:
+                        $ref: '#/components/schemas/ResultsHash'
+                      reports:
+                        type: array
+                        x-stoplight:
+                          id: 57dr10qztcs2k
+                        description: Links to any audit reports generated.
+                        items:
+                          x-stoplight:
+                            id: 60enjamejyous
+                          type: string
+                          format: uri
+                        readOnly: true
+                      proof:
+                        $ref: '#/components/schemas/Proof'
+                        x-stoplight:
+                          id: 2mkc9fwb8fmy0
+                      seed:
+                        $ref: '#/components/schemas/Seed'
+                        x-stoplight:
+                          id: p6856encxa4jz
+                  - $ref: '#/components/schemas/UserDataFields'
+                  - type: object
+                    properties:
+                      clientData:
+                        $ref: '#/components/schemas/ClientData'
+                      userData:
+                        type: array
+                        description: All text fields that were signed and logged.
+                        example:
+                          - some data field
+                          - some other data
+                        items:
+                          type: string
+                      extractFields:
+                        $ref: '#/components/schemas/ExtractFields'
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content: {}
+        '404':
+          description: Not Found
+          content: {}
+        '422':
+          description: Unprocessable Entity (WebDAV)
+          content: {}
+        '500':
+          description: Internal Server Error
+          content: {}
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - recordId
+              properties:
+                recordId:
+                  type: string
+                  description: The Unique Record Identifier (URI) of the record to be verified. Required input.
+                  example: EX210622870000000335
+                recordHandle:
+                  type: string
+                  description: The recordHandle that was returned in RNG response. Including this parameter may improve response time. Optional input.
+                  format: int64
+                  example: '184638'
+                includeReports:
+                  type: boolean
+                  x-stoplight:
+                    id: g1kgasfq20nm6
+                  description: True if the response should wait for and include draw reports. Optional input.
+                includeExtract:
+                  type: boolean
+                  x-stoplight:
+                    id: vr5bf9pnfxk8q
+                  description: True if the response should include TD360 "extract" data fields. Optional input.
+        description: ''
+      tags:
+        - Draws
+      x-internal: true
+      security:
+        - {}
+        - ApiKeyAuth: []
+  /server/status:
+    parameters: []
+    get:
+      summary: Get Server Status
+      description: |-
+        Get current status of the server. Returns HTTP 200 status code if the server is ready to generate, or HTTP 503 if any problems with the RNG engine have been detected. A typical cause of a 503 response is that are no HSMs connected to the draw server.
+
+        This operation can be used by network monitoring systems to report exceptions and automatically manage load balancing.
+      operationId: get-status
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ServerInfo'
+                  - type: object
+                    properties:
+                      serverTime:
+                        type: string
+                        format: date-time
+                        description: Current system time of the RNG server.
+                        example: '2020-09-30T18:30:23Z'
+                      businessDay:
+                        type: integer
+                        description: Current business day for this RNG server. Format is YYMMDD.
+                        example: 200930
+                      activeHsm:
+                        description: 'Details of the currently active HSM, if any.'
+                        allOf:
+                          - $ref: '#/components/schemas/SecurityModule'
+              examples: {}
+        '401':
+          description: Unauthorized
+        '503':
+          description: Service Unavailable
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ServerInfo'
+                  - type: object
+                    properties:
+                      serverTime:
+                        type: string
+                        format: date-time
+                        description: Current system time of the RNG server.
+                        example: '2020-09-30T18:30:23Z'
+                      businessDay:
+                        type: integer
+                        description: Current business day for this RNG server. Format is YYMMDD.
+                        example: 200930
+              examples: {}
+      tags:
+        - Server
+      security:
+        - {}
+        - ApiKeyAuth: []
+  /server/products:
+    parameters: []
+    get:
+      summary: Get Draw Products
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ServerInfo'
+                  - type: object
+                    properties:
+                      products:
+                        type: array
+                        description: Array of configured draw products.
+                        items:
+                          $ref: '#/components/schemas/ProductDef'
+              examples: {}
+        '401':
+          description: Unauthorized
+      operationId: get-products
+      description: Get all configured draw products on the draw server.
+      tags:
+        - Server
+      x-internal: false
+      security:
+        - {}
+        - ApiKeyAuth: []
+      parameters: []
+  /server/hsms:
+    get:
+      summary: Get Security Modules
+      tags:
+        - Server
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ServerInfo'
+                  - type: object
+                    properties:
+                      hsms:
+                        description: HSMs currently connected to the server.
+                        type: array
+                        items:
+                          allOf:
+                            - type: object
+                              properties:
+                                active:
+                                  type: boolean
+                                  description: True if this is the currently active HSM.
+                            - $ref: '#/components/schemas/SecurityModule'
+              examples: {}
+        '401':
+          description: Unauthorized
+      operationId: get-hsms
+      description: Get all current hardware security modules (HSMs) found on the draw server.
+      x-internal: false
+      security:
+        - {}
+        - ApiKeyAuth: []
+    parameters: []
+security: []
+tags:
+  - name: Draws
+    description: Operations related to draw records.
+  - name: Server
+    description: Operations related to draw server configuration and status.
